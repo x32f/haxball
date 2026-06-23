@@ -1,5 +1,5 @@
 ## 使い方
-この[テキストコード](https://raw.githubusercontent.com/x32f/haxball/refs/heads/main/haxball84.txt)を全てコピーする<br>
+この[テキストコード](https://github.com/x32f/haxball/blob/main/haxball84.txt)を全てコピーする<br>
 ブラウザで[Haxball Headless Host](https://www.haxball.com/headless)を開く<br>
 F12キーを押し、開発者ツールを開く<br>
 コンソール欄にペーストし、Enter<br>
