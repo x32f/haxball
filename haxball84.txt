@@ -1,0 +1,966 @@
+// --- [設定エリア] ---
+const ROOM_NAME = "エッヂ";
+const PASSWORD = "0708";
+const STOP_COMMAND = "!stop";
+const ADMIN_COMMAND = "!admin";
+const MAX_PLAYERS = 30;
+const AFK_TIME_LIMIT = 30000;
+const AFK_KICK_TIME_LIMIT = 600000;
+
+const STADIUM_MODES = {
+    "!default":   { id: "default",   name: "デフォルト" },
+    "!futsal":    { id: "futsal",    name: "フットサル" },
+    "!tennis":    { id: "tennis",    name: "テニス" },
+    "!dodgeball": { id: "dodgeball", name: "ドッジボール" }
+};
+const STADIUM_ID_TO_NAME = Object.fromEntries(
+    Object.values(STADIUM_MODES).map(({ id, name }) => [id, name])
+);
+
+const MAKYU_MODES = {
+    "!lightning": { id: "lightning", name: "ライトニング" },
+    "!topspin":   { id: "topspin",   name: "トップスピン" },
+    "!tiger":     { id: "tiger",     name: "タイガー" },
+    "!unmakyu":   { id: "none",      name: "魔球オフ" }
+};
+const MAKYU_ID_TO_NAME = {
+    ...Object.fromEntries(
+        Object.values(MAKYU_MODES).map(({ id, name }) => [id, name])
+    ),
+    "none": "なし" 
+};
+
+const ABE_MESSAGES = [
+    "あそこはまさにぎゅっとこう絞まっていまして",
+    "（ここで水を飲む）",
+    "これは随分 熱戦だ",
+    "こんなの通しちゃ駄目だよ",
+    "できない理由を考えるのではなく！",
+    "日本よ、日本人よ、世界の真ん中で咲き誇れ！",
+    "まあいいじゃんそういうの",
+    "皆さん楽しんでますか",
+    "もちろん応援しております",
+    "与党から良いパスが出た",
+    "私が完全勝利をしましたけれどもね、私が。"
+];
+const GOAL_X_A = 665;
+const GOAL_X_B = 793;
+const GOAL_X_C = 950;
+const GOAL_X_D = 1200;
+const GOAL_X_BIG = 550;
+const GOAL_X_HUGE = 700;
+
+const MAPS = {};
+
+var room = HBInit({
+    roomName: ROOM_NAME,
+    playerName: "botABE",
+    maxPlayers: MAX_PLAYERS,
+    password: PASSWORD,
+    public: true,
+    noPlayer: false
+});
+// --- [外部マップデータ読み込みエリア] ---
+const MAP_URLS = {
+    SOCCER_A: "https://raw.githubusercontent.com/x32f/haxball/67d68e169c236336dca1d138835ae8875e97398f/Soccer_3v3_4v4.hbs",
+    SOCCER_B: "https://raw.githubusercontent.com/x32f/haxball/67d68e169c236336dca1d138835ae8875e97398f/Soccer_5v5_6v6_Turbo_v2.hbs",
+    SOCCER_C: "https://raw.githubusercontent.com/x32f/haxball/67d68e169c236336dca1d138835ae8875e97398f/Soccer_7v7_8v8_Turbo_Goalwidth_240.hbs",
+    SOCCER_D: "https://raw.githubusercontent.com/x32f/haxball/67d68e169c236336dca1d138835ae8875e97398f/Abe%20Shinzo%20Soccer%20Stadium%2010x10.hbs",
+    FUTSAL_A: "https://raw.githubusercontent.com/x32f/haxball/67d68e169c236336dca1d138835ae8875e97398f/Futsal_3v3_4v4.hbs",
+    FUTSAL_B: "https://raw.githubusercontent.com/x32f/haxball/67d68e169c236336dca1d138835ae8875e97398f/Futsal_5v5_6v6_Turbo_v2.hbs",
+    FUTSAL_C: "https://raw.githubusercontent.com/x32f/haxball/67d68e169c236336dca1d138835ae8875e97398f/Futsal_7v7_8v8_Turbo_Goalwidth_240.hbs",
+    FUTSAL_D: "https://raw.githubusercontent.com/x32f/haxball/67d68e169c236336dca1d138835ae8875e97398f/Abe%20Shinzo%20Stadium%2010x10.hbs",
+    TENNIS_A: "https://raw.githubusercontent.com/x32f/haxball/67d68e169c236336dca1d138835ae8875e97398f/Tennis_3v3_4v4.hbs",
+    TENNIS_B: "https://raw.githubusercontent.com/x32f/haxball/67d68e169c236336dca1d138835ae8875e97398f/Tennis_5v5_6v6_Turbo_v2.hbs",
+    TENNIS_C: "https://raw.githubusercontent.com/x32f/haxball/67d68e169c236336dca1d138835ae8875e97398f/Tennis_7v7_8v8_Turbo.hbs",
+    TENNIS_D: "https://raw.githubusercontent.com/x32f/haxball/67d68e169c236336dca1d138835ae8875e97398f/Abe%20Shinzo%20Tennis%20Stadium%2010x10.hbs",
+    DODGEBALL: "https://raw.githubusercontent.com/x32f/haxball/67d68e169c236336dca1d138835ae8875e97398f/Dodgeball%20v2%20by%20Leo.hbs"
+};
+
+async function fetchCustomMaps() {
+    const fetchMap = async (url) => {
+        if (!url) return ``;
+        const response = await fetch(url);
+        if (!response.ok) throw new Error(`HTTPエラー: ${response.status}`);
+        return await response.text();
+    };
+
+    const keys = [
+        "SOCCER_A", "SOCCER_B", "SOCCER_C", "SOCCER_D",
+        "FUTSAL_A", "FUTSAL_B", "FUTSAL_C", "FUTSAL_D",
+        "TENNIS_A", "TENNIS_B", "TENNIS_C", "TENNIS_D",
+        "DODGEBALL"
+    ];
+
+    const results = await Promise.allSettled(keys.map(k => fetchMap(MAP_URLS[k])));
+
+    const getValue = (r) => r.status === "fulfilled" ? r.value : ``;
+    keys.forEach((k, i) => { MAPS[k] = getValue(results[i]); });
+
+    results.forEach((r, i) => {
+        if (r.status === "rejected") {
+            console.error(`マップ読み込み失敗 [${keys[i]}]:`, r.reason);
+        }
+    });
+
+    console.log("すべてのカスタムマップの読み込みが完了しました");
+    if (typeof updateStadiumSize === "function") {
+        updateStadiumSize();
+    }
+}
+fetchCustomMaps();
+// --- [データ管理用変数] ---
+var afkPlayers = new Set();
+var lastActivity = {};
+var isGameRunning = false;
+var lastBallToucher = null;
+var gameTickCounter = 0;
+var gameStartTime = 0;
+var afkStartTime = {};
+var assistPlayer = null;
+var goalCounts = {};
+var currentMode = "default";
+var nextMode = "default";
+var currentGoalX = GOAL_X_BIG;
+var gameLoopTimers = new Set();
+var postGameTimers = new Set();
+var lastKicker = null;
+var wallKickLog = [];
+var playerDribbleCount = 0;
+var dribbleStartX = 0;
+var hasDribbleAnnounced = false;
+var lastKickInfo = { kicker: null, time: 0, ballX: 0, ballY: 0 };
+var globalStats = {};
+var currentMakyuMode = "none";
+var nextMakyuMode = "none";
+var lightningData = { active: false, stage: 0, angleRad: 0, baseHeading: 0, expectedHeading: 0, currentSign: 1, tickInterval: 0, tickCount: 0 };
+var topspinData = { active: false, stage: 0, triggerTick: 0, tickCount: 0, baseSpeed: 0 };
+var tigerData = { active: false, kickerId: null };
+var hasAnnounced5Min = false;
+
+function clearAllTimers() {
+    gameLoopTimers.forEach(t => clearTimeout(t));
+    gameLoopTimers.clear();
+}
+
+function addTimer(fn, delay) {
+    var id = setTimeout(function() {
+        gameLoopTimers.delete(id);
+        fn();
+    }, delay);
+    gameLoopTimers.add(id);
+    return id;
+}
+
+function clearPostGameTimers() {
+    postGameTimers.forEach(t => clearTimeout(t));
+    postGameTimers.clear();
+}
+
+function addPostGameTimer(fn, delay) {
+    var id = setTimeout(function() {
+        postGameTimers.delete(id);
+        fn();
+    }, delay);
+    postGameTimers.add(id);
+    return id;
+}
+
+function initPlayerStats(player) {
+    var key = player.auth || player.name;
+    if (!globalStats[key]) {
+        globalStats[key] = { name: player.name, goals: 0, assists: 0, saves: 0, ownGoals: 0, wins: 0, games: 0 };
+    } else {
+        globalStats[key].name = player.name;
+    }
+}
+
+function checkAndResetRoom() {
+    var allPlayers = room.getPlayerList().filter(p => p.id !== 0);
+    var realActivePlayers = allPlayers.filter(p => !afkPlayers.has(p.id));
+
+    if (realActivePlayers.length === 0) {
+        room.stopGame();
+        isGameRunning = false;
+        lastBallToucher = null;
+        assistPlayer = null;
+        lastKicker = null;
+        wallKickLog = [];
+        clearAllTimers();
+        for (var i = 0; i < allPlayers.length; i++) {
+            room.setPlayerTeam(allPlayers[i].id, 0);
+        }
+        room.setDefaultStadium("Big");
+        currentGoalX = GOAL_X_BIG;
+        console.log("アクティブプレイヤーが0人になったため、部屋を初期化しました。");
+    }
+}
+
+function getTargetStadiumName(activeCount) {
+    if (currentMode === "dodgeball") return "Dodgeball";
+    var prefix = (currentMode === "default") ? "Soccer" : currentMode.charAt(0).toUpperCase() + currentMode.slice(1);
+    if (activeCount >= 16) return prefix + "_D";
+    if (activeCount >= 14) return prefix + "_C";
+    if (activeCount >= 10) return prefix + "_B";
+    return prefix + "_A";
+}
+
+function loadMapSafely(mapData, goalX, fallbackStadium, fallbackGoalX) {
+    if (mapData && mapData.trim() !== "") {
+        room.setCustomStadium(mapData);
+        currentGoalX = goalX;
+    } else {
+        room.setDefaultStadium(fallbackStadium);
+        currentGoalX = fallbackGoalX;
+    }
+}
+
+function updateStadiumSize() {
+    if (isGameRunning) return;
+
+    var allPlayers = room.getPlayerList().filter(p => p.id !== 0);
+    var activeCount = allPlayers.filter(p => !afkPlayers.has(p.id)).length;
+    if (activeCount === 0) return;
+
+    var stadiumType = getTargetStadiumName(activeCount);
+    switch (stadiumType) {
+        case "Soccer_A": loadMapSafely(MAPS.SOCCER_A, GOAL_X_A, "Big",  GOAL_X_BIG);  break;
+        case "Soccer_B": loadMapSafely(MAPS.SOCCER_B, GOAL_X_B, "Huge", GOAL_X_HUGE); break;
+        case "Soccer_C": loadMapSafely(MAPS.SOCCER_C, GOAL_X_C, "Huge", GOAL_X_HUGE); break;
+        case "Soccer_D": loadMapSafely(MAPS.SOCCER_D, GOAL_X_D, "Huge", GOAL_X_HUGE); break;
+        case "Futsal_A": loadMapSafely(MAPS.FUTSAL_A, GOAL_X_A, "Big",  GOAL_X_BIG);  break;
+        case "Futsal_B": loadMapSafely(MAPS.FUTSAL_B, GOAL_X_B, "Huge", GOAL_X_HUGE); break;
+        case "Futsal_C": loadMapSafely(MAPS.FUTSAL_C, GOAL_X_C, "Huge", GOAL_X_HUGE); break;
+        case "Futsal_D": loadMapSafely(MAPS.FUTSAL_D, GOAL_X_D, "Huge", GOAL_X_HUGE); break;
+        case "Tennis_A": loadMapSafely(MAPS.TENNIS_A, GOAL_X_A, "Big",  GOAL_X_BIG);  break;
+        case "Tennis_B": loadMapSafely(MAPS.TENNIS_B, GOAL_X_B, "Huge", GOAL_X_HUGE); break;
+        case "Tennis_C": loadMapSafely(MAPS.TENNIS_C, GOAL_X_C, "Huge", GOAL_X_HUGE); break;
+        case "Tennis_D": loadMapSafely(MAPS.TENNIS_D, GOAL_X_D, "Huge", GOAL_X_HUGE); break;
+        case "Dodgeball": loadMapSafely(MAPS.DODGEBALL, 450, "Big", GOAL_X_BIG); break;
+        case "Huge":     room.setDefaultStadium("Huge"); currentGoalX = GOAL_X_HUGE; break;
+        case "Big":
+        default:         room.setDefaultStadium("Big"); currentGoalX = GOAL_X_BIG; break;
+    }
+
+    if (currentMode === "tennis") {
+        room.setScoreLimit(7);
+    } else if (currentMode === "dodgeball") {
+        room.setScoreLimit(2);
+    } else {
+        room.setScoreLimit(3);
+    }
+}
+
+function resetAllToSpectators() {
+    var allPlayers = room.getPlayerList().filter(p => p.id !== 0);
+    for (var i = 0; i < allPlayers.length; i++) {
+        room.setPlayerTeam(allPlayers[i].id, 0);
+    }
+}
+
+function autoShuffleTeams() {
+    var allPlayers = room.getPlayerList().filter(p => p.id !== 0);
+    var activePlayers = allPlayers.filter(p => !afkPlayers.has(p.id));
+    if (activePlayers.length < 2) {
+        for (var i = 0; i < activePlayers.length; i++) {
+            room.setPlayerTeam(activePlayers[i].id, 0);
+        }
+        updateStadiumSize();
+        return;
+    }
+    for (var i = activePlayers.length - 1; i > 0; i--) {
+        var j = Math.floor(Math.random() * (i + 1));
+        var temp = activePlayers[i];
+        activePlayers[i] = activePlayers[j];
+        activePlayers[j] = temp;
+    }
+    var teamSize = activePlayers.length;
+    if (teamSize % 2 !== 0) {
+        teamSize--;
+        room.setPlayerTeam(activePlayers[teamSize].id, 0);
+    }
+    for (var i = 0; i < teamSize; i++) {
+        room.setPlayerTeam(activePlayers[i].id, (i % 2 === 0) ? 1 : 2);
+    }
+    updateStadiumSize();
+}
+
+function balanceTeamsMidGame() {
+    if (!isGameRunning) return;
+    const redPlayers = [];
+    const bluePlayers = [];
+    const spectators = [];
+
+    const players = room.getPlayerList();
+    for (let i = 0; i < players.length; i++) {
+        const p = players[i];
+        if (p.id === 0) continue;
+        if (p.team === 1) {
+            redPlayers.push(p);
+        } else if (p.team === 2) {
+            bluePlayers.push(p);
+        } else if (p.team === 0 && !afkPlayers.has(p.id)) {
+            spectators.push(p);
+        }
+    }
+
+    if (Math.abs(redPlayers.length - bluePlayers.length) >= 2) {
+        if (redPlayers.length > bluePlayers.length) {
+            var luckyPlayer = redPlayers[Math.floor(Math.random() * redPlayers.length)];
+            room.setPlayerTeam(luckyPlayer.id, 2);
+        } else {
+            var luckyPlayer = bluePlayers[Math.floor(Math.random() * bluePlayers.length)];
+            room.setPlayerTeam(luckyPlayer.id, 1);
+        }
+        room.sendAnnouncement("プレイヤーを移動します。", null, 0x00FFFF);
+        return;
+    }
+
+    if (Math.abs(redPlayers.length - bluePlayers.length) === 1 && spectators.length > 0) {
+        var luckyPlayer = spectators[Math.floor(Math.random() * spectators.length)];
+        room.setPlayerTeam(luckyPlayer.id, (redPlayers.length < bluePlayers.length) ? 1 : 2);
+        room.sendAnnouncement("プレイヤーを補充します。", null, 0x00FFFF);
+        return;
+    }
+
+    if (redPlayers.length === bluePlayers.length && spectators.length >= 2) {
+        var p1Index = Math.floor(Math.random() * spectators.length);
+        var player1 = spectators.splice(p1Index, 1)[0];
+        var player2 = spectators[Math.floor(Math.random() * spectators.length)];
+        room.setPlayerTeam(player1.id, 1);
+        room.setPlayerTeam(player2.id, 2);
+        room.sendAnnouncement("プレイヤーを追加します。", null, 0x00FFFF);
+    }
+}
+
+function tryStartGame(targetPlayer) {
+    var currentPlayers = room.getPlayerList().filter(p => p.id !== 0);
+    var activePlayers = currentPlayers.filter(p => !afkPlayers.has(p.id));
+    
+    if (!isGameRunning) {
+        if (activePlayers.length >= 2) {
+            clearPostGameTimers();
+            autoShuffleTeams();
+            clearAllTimers();
+            addTimer(function() { if (!isGameRunning) room.startGame(); }, 1000);
+        } else {
+            if (targetPlayer) {
+                room.setPlayerTeam(targetPlayer.id, 0);
+            }
+            updateStadiumSize();
+        }
+    }
+}
+
+function updateWinLossStats(winningTeam) {
+    var players = room.getPlayerList().filter(p => p.id !== 0 && p.team !== 0);
+    for (var i = 0; i < players.length; i++) {
+        var p = players[i];
+        var key = p.auth || p.name;
+        globalStats[key].games += 1;
+        if (p.team === winningTeam) {
+            globalStats[key].wins += 1;
+        }
+    }
+}
+
+function recordBallTouch(player) {
+    if (!player || player.id === 0) return;
+    if (lastBallToucher === null) {
+        lastBallToucher = player;
+    } else if (lastBallToucher.id !== player.id) {
+        if (lastBallToucher.team !== player.team) {
+            assistPlayer = null;
+        } else {
+            assistPlayer = lastBallToucher;
+        }
+        lastBallToucher = player;
+    }
+}
+
+function updateActivity(player) {
+    lastActivity[player.id] = Date.now();
+}
+
+room.onPlayerJoin = function(player) {
+    if (player.id === 0) return;
+    updateActivity(player);
+    initPlayerStats(player);
+    room.sendAnnouncement("ようこそ！ コマンドは `!help` で確認できます。", player.id, 0xFFFF00);
+    tryStartGame(player);
+};
+
+room.onPlayerLeave = function(player) {
+    delete lastActivity[player.id];
+    afkPlayers.delete(player.id);
+    if (lastBallToucher?.id === player.id) lastBallToucher = null;
+    if (assistPlayer?.id === player.id) assistPlayer = null;
+    checkAndResetRoom();
+    updateStadiumSize();
+};
+
+room.onPlayerTeamChange = function(changedPlayer, byPlayer) {
+    if (changedPlayer.team !== 0) {
+        updateActivity(changedPlayer);
+    }
+};
+
+room.onPlayerChat = function(player, message) {
+    if (afkPlayers.has(player.id)) {
+        afkStartTime[player.id] = Date.now();
+    }
+    
+    var args = message.split(" ");
+    var cmd = args[0].toLowerCase();
+    if (cmd === STOP_COMMAND) {
+        room.stopGame();
+        room.sendAnnouncement(player.name + " が試合を中断しました。", null, 0xFF3333, "bold");
+        return false;
+    }
+
+    if (cmd === ADMIN_COMMAND) {
+        const isCurrentAdmin = player.admin;
+        room.setPlayerAdmin(player.id, !isCurrentAdmin);
+        
+        const msg = !isCurrentAdmin ? "管理者権限を付与しました。" : "管理者権限を解除しました。";
+        room.sendAnnouncement(msg, player.id, 0x00FF00, "bold");
+        
+        return false;
+    }
+
+    if (cmd === "!help" || cmd === "!command") {
+        room.sendAnnouncement("--- コマンド一覧 ---", player.id, 0x00FFFF, "bold");
+        room.sendAnnouncement(" !afk          : 観戦\n !unafk        : 観戦解除\n !stats        : スタッツ表示", player.id, 0xFFFFFF);
+        room.sendAnnouncement(" !default      : スタジアム変更\n !futsal       : スタジアム変更\n !tennis       : スタジアム変更\n !dodgeball    : スタジアム変更", player.id, 0x00FFFF);
+        room.sendAnnouncement(" !lightning    : 打球がジグザグに曲がります。\n !topspin      : 打球が一度だけ加速します。\n !tiger        : 打球が相手を吹き飛ばします。\n !unmakyu      : 魔球オフ", player.id, 0xFFFF00);
+        room.sendAnnouncement(" !abe          : 意味のない機能だよ", player.id, 0xFF66FF);
+        return false;
+    }
+
+    if (STADIUM_MODES[cmd] || MAKYU_MODES[cmd]) {
+        const adminCount = room.getPlayerList().filter(p => p.admin).length;
+        
+        if (adminCount >= 2 && !player.admin) {
+            room.sendAnnouncement("現在、スタジアム・魔球は変更できません。", player.id, 0xFF3333, "bold");
+            return false;
+        }
+    }
+
+    if (STADIUM_MODES[cmd]) {
+        var mode = STADIUM_MODES[cmd];
+        if (nextMode !== mode.id) {
+            nextMode = mode.id;
+            room.sendAnnouncement(mode.name + "モードが予約されました。次の試合から適用されます。", null, 0x00FF00, "bold");
+        } else {
+            room.sendAnnouncement("既に" + mode.name + "モードに設定されています。", player.id, 0xFFAA00);
+        }
+        return false;
+    }
+
+    if (MAKYU_MODES[cmd]) {
+        var makyu = MAKYU_MODES[cmd];
+        if (nextMakyuMode !== makyu.id) {
+            nextMakyuMode = makyu.id;
+            var announceMsg = (makyu.id === "none")
+                ? "魔球オフモードが予約されました。次の試合から適用されます。"
+                : makyu.name + "モードが予約されました。次の試合から適用されます。";
+            room.sendAnnouncement(announceMsg, null, 0x00FF00, "bold");
+        } else {
+            var alreadyMsg = (makyu.id === "none")
+                ? "既に魔球オフモードは予約されています。"
+                : "既に" + makyu.name + "モードは予約されています。";
+            room.sendAnnouncement(alreadyMsg, player.id, 0xFFAA00);
+        }
+        return false;
+    }
+
+    if (cmd === "!abe") {
+        var randomMsg = ABE_MESSAGES[Math.floor(Math.random() * ABE_MESSAGES.length)];
+        room.sendAnnouncement(randomMsg, null, 0x00FF00, "bold");
+        return false;
+    }
+
+    if (cmd === "!stats" || cmd === "!s") {
+        var key = player.auth || player.name;
+        var s = globalStats[key];
+        var winRate = s.games > 0 ? Math.round((s.wins / s.games) * 100) : 0;
+
+        room.sendAnnouncement("【" + player.name + " の通算戦績】", player.id, 0x00FF00, "bold");
+        room.sendAnnouncement("👟 試合数: " + s.games + "戦 ｜ 🏆 勝利数: " + s.wins + "勝 (勝率: " + winRate + "%)", player.id, 0xFFFFFF);
+        room.sendAnnouncement("⚽ ゴール: " + s.goals + " ｜ 🤝 アシスト: " + s.assists + " ｜ 🧤 セーブ: " + s.saves + " ｜ 💀 OG: " + s.ownGoals, player.id, 0xFFFFFF);
+        return false;
+    }
+
+    if (cmd === "!afk" || cmd === "!a") {
+        if (!afkPlayers.has(player.id)) {
+            afkPlayers.add(player.id);
+            afkStartTime[player.id] = Date.now(); 
+            room.setPlayerTeam(player.id, 0); 
+            room.sendAnnouncement("観戦します。" + (AFK_KICK_TIME_LIMIT / 60000) + "分以内に!unafkしないとキックされます。", player.id, 0xFFAA00);
+            updateStadiumSize();
+            checkAndResetRoom(); 
+        }
+        return false;
+    }
+
+    if (cmd === "!unafk" || cmd === "!u") { 
+        if (afkPlayers.has(player.id)) {
+        afkPlayers.delete(player.id);
+            room.sendAnnouncement("試合に戻ります。", player.id, 0x00FF00);
+            tryStartGame(player);
+        }
+        return false;
+    }
+};
+
+room.onGameStart = function(byPlayer) {
+    isGameRunning = true;
+    gameStartTime = Date.now();
+    currentMode = nextMode;
+    currentMakyuMode = nextMakyuMode;
+    gameTickCounter = 0;
+    lastBallToucher = null;
+    assistPlayer = null;
+    lastKicker = null;
+    wallKickLog = [];
+    goalCounts = {};
+    clearAllTimers();
+    playerDribbleCount = 0;
+    dribbleStartX = 0;
+    hasDribbleAnnounced = false;
+
+    lightningData = { active: false, stage: 0, angleRad: 0, baseHeading: 0, expectedHeading: 0, currentSign: 1, tickInterval: 0, tickCount: 0 };
+    topspinData = { active: false, stage: 0, triggerTick: 0, tickCount: 0, baseSpeed: 0 };
+    tigerData = { active: false, kickerId: null };
+
+    hasAnnounced5Min = false;
+    lastKickInfo = { kicker: null, time: 0, ballX: 0, ballY: 0 };
+
+    room.sendAnnouncement("試合開始！", null, 0x00FF00, "bold");
+};
+
+room.onGameStop = function(byPlayer) {
+    isGameRunning = false;
+    clearAllTimers();
+    clearPostGameTimers();
+    
+    var humanPlayers = room.getPlayerList().filter(p => p.id !== 0);
+    if (humanPlayers.length === 0) {
+        checkAndResetRoom();
+        return;
+    }
+
+    var scores = room.getScores();
+    if (scores) {
+        if (scores.red > scores.blue) updateWinLossStats(1);
+        else if (scores.blue > scores.red) updateWinLossStats(2);
+    }
+
+    addPostGameTimer(function() {
+        var activePlayers = room.getPlayerList().filter(p => p.id !== 0 && !afkPlayers.has(p.id));
+        if (activePlayers.length >= 1) { 
+            resetAllToSpectators(); 
+            currentMode = nextMode; 
+            updateStadiumSize(); 
+            currentMakyuMode = nextMakyuMode;
+
+            var stadiumName = STADIUM_ID_TO_NAME[currentMode]     || "デフォルト";
+            var makyuName   = MAKYU_ID_TO_NAME[currentMakyuMode]  || "なし";
+            room.sendAnnouncement("現在のスタジアム：" + stadiumName + " ｜ 魔球：" + makyuName, null, 0x00FF00, "bold");
+        } else {
+            checkAndResetRoom();
+        }
+    }, 6000);
+    
+    addPostGameTimer(function() {
+        var activePlayers = room.getPlayerList().filter(p => p.id !== 0 && !afkPlayers.has(p.id));
+        if (activePlayers.length >= 1) autoShuffleTeams(); 
+    }, 10000);
+
+    addPostGameTimer(function() {
+        var players = room.getPlayerList();
+        var redCount = players.filter(p => p.team === 1).length;
+        var blueCount = players.filter(p => p.team === 2).length;
+
+        if (redCount > 0 && blueCount > 0) {
+            if (!isGameRunning) room.startGame(); 
+        } else {
+            checkAndResetRoom();
+        }
+    }, 12000);
+};
+
+room.onTeamGoal = function(team) {
+    var goalScorer = lastBallToucher;
+    var goalScorerName = goalScorer ? goalScorer.name : "Unknown";
+    var teamName = team === 1 ? "🔴 RED" : "🔵 BLUE";
+    var noticeColor = team === 1 ? 0xFF6666 : 0x6666FF;
+
+    playerDribbleCount = 0;
+    dribbleStartX = 0;
+    hasDribbleAnnounced = false;
+    if (goalScorer) {
+        var scoreKey = goalScorer.auth || goalScorer.name;
+        if (goalScorer.team !== team) {
+            room.sendAnnouncement(goalScorerName + " のオウンゴール！", null, 0xFF3333, "bold");
+            globalStats[scoreKey].ownGoals += 1;
+        } else {
+            globalStats[scoreKey].goals += 1;
+            goalCounts[goalScorer.id] = (goalCounts[goalScorer.id] || 0) + 1;
+
+            room.sendAnnouncement(teamName + " GOAL !!", null, noticeColor, "bold");
+            var hatTrickText = (goalCounts[goalScorer.id] === 3) ? "ハットトリック！" : "";
+            var assistUser = (assistPlayer && assistPlayer.id !== goalScorer.id && assistPlayer.team === goalScorer.team) ? assistPlayer : null;
+            if (assistUser) {
+                var assistKey = assistUser.auth || assistUser.name;
+                globalStats[assistKey].assists += 1;
+                room.sendAnnouncement(assistUser.name + " のアシストで " + goalScorerName + " がゴール！ " + hatTrickText, null, 0xFFFFFF, "bold");
+            } else {
+                room.sendAnnouncement(goalScorerName + " のゴール！ " + hatTrickText, null, 0xFFFFFF, "bold");
+            }
+        }
+    } else {
+        room.sendAnnouncement(teamName + " GOAL !!", null, noticeColor, "bold");
+    }
+
+    lastBallToucher = null;
+    assistPlayer = null;
+};
+
+room.onPlayerBallKick = function(player) {
+    updateActivity(player);
+    var ballPos = room.getBallPosition();
+    if (!ballPos) return; 
+    var now = Date.now();
+
+    if (currentMakyuMode === "lightning") {
+        var deg = 15 + Math.random() * 20;
+        var angleRad = deg * (Math.PI / 180);
+        lightningData = {
+            active: true,
+            stage: 0, 
+            angleRad: angleRad, 
+            baseHeading: 0,
+            expectedHeading: 0,
+            currentSign: Math.random() < 0.5 ? 1 : -1,
+            tickInterval: Math.floor(3 + Math.random() * 3),
+            tickCount: 0
+        };
+    } else if (currentMakyuMode === "topspin") {
+        topspinData = {
+            active: true,
+            stage: 0, 
+            triggerTick: 20 + Math.floor(Math.random() * 81),
+            tickCount: 0,
+            baseSpeed: 0
+        };
+    } else if (currentMakyuMode === "tiger") {
+        var players = room.getPlayerList().filter(p => p.id !== 0 && p.team !== 0 && p.id !== player.id);
+        var targetIds = players.map(p => p.id);
+        tigerData = { active: true, kickerId: player.id, targetIds: targetIds };
+        var ballProps = room.getDiscProperties(0);
+        if (ballProps) {
+            for (var i = 0; i < players.length; i++) {
+                var p = players[i];
+                var pProps = room.getPlayerDiscProperties(p.id);
+                if (pProps) {
+                    var dx = pProps.x - ballProps.x;
+                    var dy = pProps.y - ballProps.y;
+                    const distSq = dx * dx + dy * dy;
+                    if (distSq < 10000) {
+                        var angle = Math.atan2(dy, dx);
+                        var pushPower = 12; 
+                        room.setPlayerDiscProperties(p.id, {
+                            xspeed: pProps.xspeed + Math.cos(angle) * pushPower,
+                            yspeed: pProps.yspeed + Math.sin(angle) * pushPower
+                        });
+                    }
+                }
+            }
+        }
+    }
+
+    if (lastKicker && lastKicker.id !== player.id && lastKicker.team === player.team && currentMode !== "tennis" && currentMode !== "dodgeball") {
+        var timePassed = now - lastKickInfo.time;
+        if (timePassed < 3000) {
+            var isThroughPass = false;
+            var passDistanceX = ballPos.x - lastKickInfo.ballX;
+            var requiredDistance = 280;
+            if (player.team === 1) { 
+                if (passDistanceX >= requiredDistance) isThroughPass = true;
+            } else if (player.team === 2) { 
+                if (-passDistanceX >= requiredDistance) isThroughPass = true;
+            }
+            if (isThroughPass) {
+                var advanceDist = Math.round(Math.abs(passDistanceX));
+                room.sendAnnouncement(lastKicker.name + " の絶妙なスルーパスが通る！ [前進距離:" + advanceDist + "]", null, 0x00FFFF, "bold");
+            }
+        }
+    }
+
+    if (Math.abs(ballPos.x) > (currentGoalX - 75) && currentMode !== "tennis" && currentMode !== "dodgeball") {
+        if ((ballPos.x > 0 && player.team === 2) || (ballPos.x < 0 && player.team === 1)) {
+            if (lastKicker && lastKicker.team !== player.team) {
+                room.sendAnnouncement(player.name + " のスーパーセーブ！！チームを救った！", null, 0x00FF00, "bold");
+                var saveKey = player.auth || player.name;
+                globalStats[saveKey].saves += 1;
+            }
+        }
+    }
+
+    if (lastKicker && lastKicker.id === player.id) {
+        playerDribbleCount++;
+    } else {
+        playerDribbleCount = 1;
+        dribbleStartX = ballPos.x; 
+        hasDribbleAnnounced = false;
+    }
+
+    lastKicker = player;
+    lastKickInfo = { kicker: player, time: now, ballX: ballPos.x, ballY: ballPos.y };
+    recordBallTouch(player);
+    
+    if (!hasDribbleAnnounced && playerDribbleCount >= 3 && currentMode !== "tennis" && currentMode !== "dodgeball") {
+        var isBreakthrough = false;
+        if (player.team === 1) { 
+            if (dribbleStartX < (-currentGoalX * 0.2) && ballPos.x > (currentGoalX * 0.4)) isBreakthrough = true;
+        } else if (player.team === 2) { 
+            if (dribbleStartX > (currentGoalX * 0.2) && ballPos.x < (-currentGoalX * 0.4)) isBreakthrough = true;
+        }
+        if (isBreakthrough) {
+            var advanceDist = Math.round(Math.abs(ballPos.x - dribbleStartX));
+            room.sendAnnouncement(player.name + " が圧倒的個の力でディフェンスを突破！ [前進距離:" + advanceDist + "]", null, 0xFFAA00, "bold");
+            hasDribbleAnnounced = true;
+        }
+    }
+
+    var isNearWall = (Math.abs(ballPos.x) > 350 || Math.abs(ballPos.y) > 170) && currentMode !== "tennis" && currentMode !== "dodgeball";
+    if (isNearWall) {
+        wallKickLog.push(now);
+        while (wallKickLog.length > 0 && now - wallKickLog[0] >= 1500) {
+            wallKickLog.shift();
+        }
+        if (wallKickLog.length === 4) { 
+            room.sendAnnouncement("壁際での激しい競り合い！両者一歩も譲らない！", null, 0xAAAAAA, "italic");
+        }
+    }
+};
+
+room.onGameTick = function() {
+    if (!isGameRunning) return;
+    gameTickCounter++;
+    var ballProps = room.getDiscProperties(0);
+    if (!ballProps) return;
+
+    if (gameTickCounter >= 18000 && !hasAnnounced5Min) {
+        room.sendAnnouncement("早く得点しろよ", null, 0x00FF00, "bold");
+        hasAnnounced5Min = true; 
+    }
+
+    if (gameTickCounter % 179 === 0) {
+    balanceTeamsMidGame();
+    }
+
+    if (currentMode === "tennis" && gameTickCounter % 199 === 0) {
+        var players = room.getPlayerList();
+        for (var i = 0; i < players.length; i++) {
+            var p = players[i];
+            if (p.id === 0 || p.team === 0) continue;
+
+            var pProps = room.getPlayerDiscProperties(p.id);
+            if (pProps) {
+                if (p.team === 1 && pProps.x > 0) {
+                    room.setPlayerDiscProperties(p.id, { x: -50, xspeed: 0 });
+                }
+                else if (p.team === 2 && pProps.x < 0) {
+                    room.setPlayerDiscProperties(p.id, { x: 50, xspeed: 0 });
+                }
+            }
+        }
+    }
+
+    if (currentMode === "dodgeball" && gameTickCounter % 23 === 0) { 
+        var players = room.getPlayerList();
+        var redAlive = 0;
+        var blueAlive = 0;
+
+        for (var i = 0; i < players.length; i++) {
+            var p = players[i];
+            if (p.id === 0 || p.team === 0) continue;
+
+            var pProps = room.getPlayerDiscProperties(p.id);
+            if (pProps) {
+                var isAlive = (Math.abs(pProps.x) < 460 && Math.abs(pProps.y) < 205);
+                if (isAlive) {
+                    if (p.team === 1) redAlive++;
+                    if (p.team === 2) blueAlive++;
+                }
+            }
+        }
+
+        if (Math.abs(ballProps.y) < 210) {
+            if (redAlive === 0 && blueAlive > 0) {
+                room.setDiscProperties(0, { x: -50, y: 220, xspeed: 0, yspeed: 20, cMask: 0 });
+                room.sendAnnouncement("赤チーム全滅！ 青チームがラウンド勝利！", null, 0x00FFFF, "bold");
+            } else if (blueAlive === 0 && redAlive > 0) {
+                room.setDiscProperties(0, { x: 50, y: 220, xspeed: 0, yspeed: 20, cMask: 0 });
+                room.sendAnnouncement("青チーム全滅！ 赤チームがラウンド勝利！", null, 0x00FFFF, "bold");
+            }
+        }
+    }
+
+    if (currentMakyuMode === "lightning" && lightningData.active) {
+        if (ballProps) {
+            var speedSq = ballProps.xspeed * ballProps.xspeed + ballProps.yspeed * ballProps.yspeed;
+
+            if (speedSq < 1) {
+                lightningData.active = false;
+            } else {
+                const speed = Math.sqrt(speedSq);
+                if (lightningData.stage === 0) {
+                    lightningData.baseHeading = Math.atan2(ballProps.yspeed, ballProps.xspeed);
+                    lightningData.expectedHeading = lightningData.baseHeading + (lightningData.angleRad * lightningData.currentSign);
+                    room.setDiscProperties(0, { 
+                        xspeed: speed * Math.cos(lightningData.expectedHeading), 
+                        yspeed: speed * Math.sin(lightningData.expectedHeading) 
+                    });
+                    lightningData.stage = 1;
+                    lightningData.tickCount = 0;
+                } else if (lightningData.stage === 1) {
+                    var actualHeading = Math.atan2(ballProps.yspeed, ballProps.xspeed);
+                    var diff = actualHeading - lightningData.expectedHeading;
+                    
+                    while (diff > Math.PI) diff -= 2 * Math.PI;
+                    while (diff < -Math.PI) diff += 2 * Math.PI;
+                    
+                    if (Math.abs(diff) > 1.5) {
+                        lightningData.active = false;
+                    } else {
+                        lightningData.tickCount++;
+                        if (lightningData.tickCount >= lightningData.tickInterval) {
+                            lightningData.currentSign *= -1;
+                            lightningData.expectedHeading = lightningData.baseHeading + (lightningData.angleRad * lightningData.currentSign);
+                            room.setDiscProperties(0, { 
+                                xspeed: speed * Math.cos(lightningData.expectedHeading), 
+                                yspeed: speed * Math.sin(lightningData.expectedHeading) 
+                            });
+                            lightningData.tickCount = 0;
+                        }
+                    }
+                }
+            }
+        } else {
+            lightningData.active = false;
+        }
+    } else if (currentMakyuMode === "topspin" && topspinData.active) {
+        if (ballProps) {
+            if (topspinData.stage === 0) {
+                var speedSq = ballProps.xspeed * ballProps.xspeed + ballProps.yspeed * ballProps.yspeed;
+                topspinData.baseSpeed = Math.sqrt(speedSq);
+                topspinData.stage = 1;
+                topspinData.tickCount = 1;
+            } else if (topspinData.stage === 1) {
+                topspinData.tickCount++;
+                if (topspinData.tickCount >= topspinData.triggerTick) {
+                    var currentSpeedSq = ballProps.xspeed * ballProps.xspeed + ballProps.yspeed * ballProps.yspeed;
+                    
+                    if (currentSpeedSq > 0.01) {
+                        const currentSpeed = Math.sqrt(currentSpeedSq);
+                        var heading = Math.atan2(ballProps.yspeed, ballProps.xspeed);
+                        var newSpeed = currentSpeed + (topspinData.baseSpeed * 0.5); 
+                        room.setDiscProperties(0, {
+                            xspeed: newSpeed * Math.cos(heading),
+                            yspeed: newSpeed * Math.sin(heading)
+                        });
+                    }
+                    topspinData.active = false;
+                }
+            }
+        } else {
+            topspinData.active = false;
+        }
+    } else if (currentMakyuMode === "tiger" && tigerData.active) {
+        if (ballProps) {
+            var speedSq = ballProps.xspeed * ballProps.xspeed + ballProps.yspeed * ballProps.yspeed;
+            if (speedSq < 1) { 
+                tigerData.active = false;
+            } else {
+                if (tigerData.targetIds) {
+                    for (var i = 0; i < tigerData.targetIds.length; i++) {
+                        var targetId = tigerData.targetIds[i];
+                        var pProps = room.getPlayerDiscProperties(targetId);
+                        if (pProps) {
+                            var dx = pProps.x - ballProps.x;
+                            var dy = pProps.y - ballProps.y;
+                            var distSq = dx * dx + dy * dy;
+                            if (distSq < 1225) {
+                                var angle = Math.atan2(dy, dx);
+                                var blastPower = 20;
+                                room.setPlayerDiscProperties(targetId, {
+                                    xspeed: pProps.xspeed + Math.cos(angle) * blastPower,
+                                    yspeed: pProps.yspeed + Math.sin(angle) * blastPower
+                                });
+                                tigerData.active = false; 
+                                var targetPlayer = room.getPlayer(targetId);
+                                var targetName = targetPlayer ? targetPlayer.name : "誰か";
+                                room.sendAnnouncement(targetName + " が吹き飛ばされた！", null, 0xFF8800, "bold");
+                                break;
+                            }
+                        }
+                    }
+                }
+            }
+        } else {
+            tigerData.active = false;
+        }
+    }
+};
+
+room.onPlayerActivity = function(player) {
+    updateActivity(player);
+    if (afkPlayers.has(player.id)) {
+        afkStartTime[player.id] = Date.now();
+    }
+};
+
+setInterval(function() {
+    if (!isGameRunning) return;
+
+    var now = Date.now();
+    if (now - gameStartTime < 3000) return;
+
+    var players = room.getPlayerList();
+
+    for (var i = 0; i < players.length; i++) {
+        var p = players[i];
+        if (p.id === 0) continue;
+
+        if (p.team === 0 && afkPlayers.has(p.id)) {
+            if (!afkStartTime[p.id]) {
+                afkStartTime[p.id] = now;
+            }
+            if (now - afkStartTime[p.id] > AFK_KICK_TIME_LIMIT) {
+                room.kickPlayer(p.id, "AFK", false);
+                delete afkStartTime[p.id];
+                continue;
+            }
+        } else {
+            if (afkStartTime[p.id]) {
+                delete afkStartTime[p.id];
+            }
+        }
+
+        if (p.team !== 0) {
+            if (lastActivity[p.id] && (now - lastActivity[p.id] > AFK_TIME_LIMIT)) {
+                if (!afkPlayers.has(p.id)) {
+                    afkPlayers.add(p.id);
+                    afkStartTime[p.id] = now;
+                    room.setPlayerTeam(p.id, 0);
+                    room.sendAnnouncement("観戦します。" + (AFK_KICK_TIME_LIMIT / 60000) + "分以内に!unafkしないとキックされます。", p.id, 0xFFAA00);
+                    updateStadiumSize();
+                    checkAndResetRoom();
+                }
+            }
+        }
+    }
+}, 2999);
