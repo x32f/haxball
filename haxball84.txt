@@ -5,7 +5,7 @@ const STOP_COMMAND = "!stop";
 const ADMIN_COMMAND = "!admin";
 const MAX_PLAYERS = 30;
 const AFK_TIME_LIMIT = 30000;
-const AFK_KICK_TIME_LIMIT = 600000;
+const AFK_KICK_TIME_LIMIT = 3600000;
 
 const STADIUM_MODES = {
     "!default":   { id: "default",   name: "デフォルト" },
@@ -21,6 +21,7 @@ const MAKYU_MODES = {
     "!lightning": { id: "lightning", name: "ライトニング" },
     "!topspin":   { id: "topspin",   name: "トップスピン" },
     "!tiger":     { id: "tiger",     name: "タイガー" },
+    "!space":     { id: "space",     name: "スペース" },
     "!unmakyu":   { id: "none",      name: "魔球オフ" }
 };
 const MAKYU_ID_TO_NAME = {
@@ -432,7 +433,7 @@ room.onPlayerChat = function(player, message) {
         room.sendAnnouncement("--- コマンド一覧 ---", player.id, 0x00FFFF, "bold");
         room.sendAnnouncement(" !afk          : 観戦\n !unafk        : 観戦解除\n !stats        : スタッツ表示", player.id, 0xFFFFFF);
         room.sendAnnouncement(" !default      : スタジアム変更\n !futsal       : スタジアム変更\n !tennis       : スタジアム変更\n !dodgeball    : スタジアム変更", player.id, 0x00FFFF);
-        room.sendAnnouncement(" !lightning    : 打球がジグザグに曲がります。\n !topspin      : 打球が一度だけ加速します。\n !tiger        : 打球が相手を吹き飛ばします。\n !unmakyu      : 魔球オフ", player.id, 0xFFFF00);
+        room.sendAnnouncement(" !lightning    : 打球がジグザグに曲がります。\n !topspin      : 打球が一度だけ加速します。\n !tiger        : 打球が相手を吹き飛ばします。\n !space        : 打球が減速しなくなります。\n !unmakyu      : 魔球オフ", player.id, 0xFFFF00);
         room.sendAnnouncement(" !abe          : 意味のない機能だよ", player.id, 0xFF66FF);
         return false;
     }
@@ -678,6 +679,8 @@ room.onPlayerBallKick = function(player) {
                 }
             }
         }
+    } else if (currentMakyuMode === "space") {
+            room.setDiscProperties(0, { damping: 1 });
     }
 
     if (lastKicker && lastKicker.id !== player.id && lastKicker.team === player.team && currentMode !== "tennis" && currentMode !== "dodgeball") {
